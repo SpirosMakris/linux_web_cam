@@ -314,4 +314,6 @@ int main(void)
   /* Vendor specific - used for RK_ISP1 camera sub-system */
   PRINT_DEFINE_U(V4L2_META_FMT_RK_ISP1_PARAMS);  /* Rockchip ISP1 3A Parameters */
   PRINT_DEFINE_U(V4L2_META_FMT_RK_ISP1_STAT_3A); /* Rockchip ISP1 3A Statistics */
+
+  PRINT_DEFINE_LU(VIDIOC_REQBUFS);
 }
