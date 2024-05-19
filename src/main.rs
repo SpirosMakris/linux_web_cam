@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, mem::MaybeUninit, os::fd::AsRawFd};
+use std::{fs::OpenOptions, io::Write, mem::MaybeUninit, os::fd::AsRawFd};
 
 use crate::v4l2::{v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE, v4l2_field_V4L2_FIELD_NONE};
 
@@ -9,6 +9,7 @@ const DEVICE_NAME: &str = "/dev/video0";
 // Generated with `resolve_ioctl.c``
 const VIDIOC_QUERYCAP: u64 = 2154321408;
 const VIDIOC_G_FMT: u64 = 3234878980;
+const VIDIOC_S_FMT: u64 = 3234878981;
 
 const V4L2_PIX_FMT_YUYV: u32 = 1448695129;
 const VIDIOC_REQBUFS: u64 = 3222558216;
@@ -107,8 +108,6 @@ fn main() {
         ioctl!(fd, VIDIOC_QBUF, &mut v4l2_buf).unwrap();
     });
 
-    drop(buffers);
-
     // Start streaming
     let video_capture_buf_type: v4l2::v4l2_buf_type = v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
     unsafe {
@@ -139,7 +138,22 @@ fn main() {
             // up again after we're done.
             ioctl!(fd, VIDIOC_DQBUF, &v4l2_buf).unwrap();
 
-            ioctl!(fd, VIDIOC_QBUF, &v4l2_buf).unwrap();
+            let img_data = std::slice::from_raw_parts(
+                v4l2_buf.m.userptr as *const u8,
+                v4l2_buf.bytesused as usize,
+            );
+
+            let mut output = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open("test.yuv")
+                .unwrap();
+            output.write_all(img_data).unwrap();
+
+            println!("{}", img_data.len());
+            return;
+            //  ioctl!(fd, VIDIOC_QBUF, &v4l2_buf).unwrap();
         }
     }
 }
