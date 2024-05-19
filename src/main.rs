@@ -13,6 +13,7 @@ const VIDIOC_G_FMT: u64 = 3234878980;
 const V4L2_PIX_FMT_YUYV: u32 = 1448695129;
 const VIDIOC_REQBUFS: u64 = 3222558216;
 const VIDIOC_QBUF: u64 = 3227014671;
+const VIDIOC_DQBUF: u64 = 3227014673;
 const VIDIOC_STREAMON: u64 = 1074026002;
 
 // For variadic function ioctl
@@ -106,11 +107,39 @@ fn main() {
         ioctl!(fd, VIDIOC_QBUF, &mut v4l2_buf).unwrap();
     });
 
+    drop(buffers);
+
     // Start streaming
     let video_capture_buf_type: v4l2::v4l2_buf_type = v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
     unsafe {
         ioctl!(fd, VIDIOC_STREAMON, &video_capture_buf_type).unwrap();
     }
 
-    std::thread::sleep(std::time::Duration::from_secs(3));
+    // Main loop
+    loop {
+        unsafe {
+            let revents: i16 = 0;
+
+            let mut poll_fd: [v4l2::pollfd; 1] = [v4l2::pollfd {
+                fd,
+                events: v4l2::POLLIN as i16,
+                revents,
+            }];
+            let infinite_timeout = -1;
+            let ret = v4l2::poll(poll_fd.as_mut_ptr(), poll_fd.len() as u64, infinite_timeout);
+            println!("{}", ret);
+
+            let mut v4l2_buf: v4l2::v4l2_buffer = std::mem::zeroed();
+            v4l2_buf.type_ = v4l2::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            v4l2_buf.memory = v4l2::v4l2_memory_V4L2_MEMORY_USERPTR;
+
+            // Read frame
+
+            // Deque buffer. We can use them now and queue them
+            // up again after we're done.
+            ioctl!(fd, VIDIOC_DQBUF, &v4l2_buf).unwrap();
+
+            ioctl!(fd, VIDIOC_QBUF, &v4l2_buf).unwrap();
+        }
+    }
 }
