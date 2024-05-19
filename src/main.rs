@@ -6,6 +6,9 @@ const DEVICE_NAME: &str = "/dev/video0";
 
 // Generated with `resolve_ioctl.c``
 const VIDIOC_QUERYCAP: u64 = 2154321408;
+const VIDIOC_G_FMT: u64 = 3234878980;
+
+const V4L2_PIX_FMT_YUYV: u32 = 1448695129;
 
 // For variadic function ioctl
 macro_rules! ioctl {
@@ -41,5 +44,28 @@ fn main() {
         capabilities.assume_init()
     };
 
+    // Assert we have correct capabilities from device
+    assert!(capabilities.capabilities & v4l2::V4L2_CAP_VIDEO_CAPTURE != 0);
+    assert!(capabilities.capabilities & v4l2::V4L2_CAP_STREAMING != 0);
+
     println!("{capabilities:?}");
+
+    // Get format v4l2 wants to give us
+    let format = unsafe {
+        let mut format: v4l2::v4l2_format = std::mem::zeroed();
+        format.type_ = v4l2::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        ioctl!(fd, VIDIOC_G_FMT, &mut format).unwrap();
+        format
+    };
+
+    unsafe {
+        println!("image size: {:?}", format.fmt.pix.sizeimage);
+        println!("width: {:?}", format.fmt.pix.width);
+        println!("height: {:?}", format.fmt.pix.height);
+        println!("pixelformat: {:?}", format.fmt.pix.pixelformat);
+
+        assert!(format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV);
+    }
+
+    // Init the userptr
 }
