@@ -56,11 +56,17 @@ impl V4l2Frame<'_> {
             std::slice::from_raw_parts(self.buf.m.userptr as *const u8, self.buf.bytesused as usize)
         }
     }
+    // @FIXME: Get these from actual device
+    pub fn width(&self) -> usize {
+        640
+    }
+    pub fn height(&self) -> usize {
+        480
+    }
 }
 
 impl Drop for V4l2Frame<'_> {
     fn drop(&mut self) {
-        println!("Dropping frame");
         unsafe {
             ioctl!(self.fd, VIDIOC_QBUF, &mut self.buf).unwrap();
         }
@@ -172,8 +178,8 @@ impl V4l2VideoDevice {
 
         unsafe {
             let infinite_timeout = -1;
-            let ret = sys::poll(poll_fd.as_mut_ptr(), poll_fd.len() as u64, infinite_timeout);
-            println!("{}", ret);
+            let _ret = sys::poll(poll_fd.as_mut_ptr(), poll_fd.len() as u64, infinite_timeout);
+            // println!("{}", ret);
 
             let mut v4l2_buf: sys::v4l2_buffer = std::mem::zeroed();
             v4l2_buf.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
