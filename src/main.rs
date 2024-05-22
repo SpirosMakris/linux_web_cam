@@ -1,5 +1,8 @@
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::{
+    iter::repeat,
+    sync::mpsc::{self, Receiver, Sender},
+};
 
 mod v4l2;
 
@@ -51,13 +54,41 @@ fn feed_gui(ctx: egui::Context, v4l2_device: v4l2::V4l2VideoDevice, tx: Sender<T
         // YUYV encoded
         let data = v4l2_frame.data();
 
-        // Just get black & white data
-        let color_data: Vec<Color32> = data
+        let ys = data.iter().step_by(2);
+        let us = data
             .iter()
-            // Discard U and V data
-            .step_by(2)
-            .map(|y| egui::Color32::from_gray(*y))
+            .skip(1)
+            .step_by(4)
+            .flat_map(|u| repeat(u).take(2));
+        let vs = data
+            .iter()
+            .skip(3)
+            .step_by(4)
+            .flat_map(|u| repeat(u).take(2));
+
+        let color_data: Vec<Color32> = ys
+            .zip(us)
+            .zip(vs)
+            .map(|((y, u), v)| {
+                let y = *y as f32 - 16.;
+                let u = *u as f32 - 128.;
+                let v = *v as f32 - 128.;
+
+                let r = 1.164 * y + 1.596 * v;
+                let g = 1.164 * y - 0.392 * u - 0.813 * v;
+                let b = 1.164 * y + 2.017 * u;
+
+                egui::Color32::from_rgb(r as u8, g as u8, b as u8)
+            })
             .collect();
+
+        // Just get black & white data
+        // let color_data: Vec<Color32> = data
+        //     .iter()
+        //     // Discard U and V data
+        //     .step_by(2)
+        //     .map(|y| egui::Color32::from_gray(*y))
+        //     .collect();
 
         let image = ColorImage {
             size: [v4l2_frame.width(), v4l2_frame.height()],
