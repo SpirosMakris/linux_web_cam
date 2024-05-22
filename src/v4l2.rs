@@ -46,6 +46,8 @@ macro_rules! ioctl {
 
 pub struct V4l2Frame<'fd> {
     fd: i32,
+    width: usize,
+    height: usize,
     buf: sys::v4l2_buffer,
     _phantom: PhantomData<&'fd ()>,
 }
@@ -58,10 +60,10 @@ impl V4l2Frame<'_> {
     }
     // @FIXME: Get these from actual device
     pub fn width(&self) -> usize {
-        640
+        self.width
     }
     pub fn height(&self) -> usize {
-        480
+        self.height
     }
 }
 
@@ -75,6 +77,8 @@ impl Drop for V4l2Frame<'_> {
 
 pub struct V4l2VideoDevice {
     handle: File,
+    width: usize,
+    height: usize,
     _buffers: Vec<Vec<u8>>,
 }
 
@@ -160,8 +164,17 @@ impl V4l2VideoDevice {
             ioctl!(fd, VIDIOC_STREAMON, &video_capture_buf_type).unwrap();
         }
 
+        let (width, height) = unsafe {
+            (
+                format.fmt.pix.width as usize,
+                format.fmt.pix.height as usize,
+            )
+        };
+
         Self {
             handle: video_handle,
+            width,
+            height,
             _buffers: buffers,
         }
     }
@@ -193,6 +206,8 @@ impl V4l2VideoDevice {
 
             V4l2Frame {
                 fd,
+                width: self.width,
+                height: self.height,
                 buf: v4l2_buf,
                 _phantom: PhantomData,
             }
