@@ -20,6 +20,9 @@ impl WebcamUi {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
         let v4l2_device = v4l2::V4l2VideoDevice::new(&DEVICE_NAME);
+
+        v4l2_device.print_formats();
+
         let (tx, rx) = mpsc::channel();
         let ctx = cc.egui_ctx.clone();
 

@@ -13,10 +13,19 @@ const VIDIOC_G_FMT: u64 = 3234878980;
 const _VIDIOC_S_FMT: u64 = 3234878981;
 
 const V4L2_PIX_FMT_YUYV: u32 = 1448695129;
+const V4L2_PIX_FMT_MJPEG: u32 = 1196444237;
+
 const VIDIOC_REQBUFS: u64 = 3222558216;
 const VIDIOC_QBUF: u64 = 3227014671;
 const VIDIOC_DQBUF: u64 = 3227014673;
 const VIDIOC_STREAMON: u64 = 1074026002;
+const VIDIOC_ENUM_FMT: u64 = 3225441794;
+
+#[repr(u32)]
+pub enum Formats {
+    V4L2_PIX_FMT_YUYV(u32) = 1448695129,
+    V4L2_PIX_FMT_MJPEG(u32) = 1196444237,
+}
 
 mod sys {
     #![allow(non_upper_case_globals)]
@@ -211,6 +220,31 @@ impl V4l2VideoDevice {
                 buf: v4l2_buf,
                 _phantom: PhantomData,
             }
+        }
+    }
+
+    pub fn print_formats(&self) {
+        let mut i: u32 = 0;
+        let fd = self.handle.as_raw_fd();
+        loop {
+            unsafe {
+                let mut descr: sys::v4l2_fmtdesc = std::mem::zeroed();
+                descr.index = i;
+                descr.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                let ret = ioctl!(fd, VIDIOC_ENUM_FMT, &mut descr);
+
+                if let Err(e) = ret {
+                    if e.kind() == std::io::ErrorKind::InvalidInput {
+                        break;
+                    }
+
+                    panic!("Unexpected error: {e}");
+                };
+
+                println!("FMT: {:?}", descr);
+            }
+
+            i += 1;
         }
     }
 }
