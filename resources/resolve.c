@@ -14,9 +14,6 @@ int main(void)
     return 1;
   }
 
-  PRINT_DEFINE_LU(file, VIDIOC_QUERYCAP);
-  PRINT_DEFINE_LU(file, VIDIOC_G_FMT);
-
   /* RGB formats (1 or 2 bytes per pixel) */
   PRINT_DEFINE_U(file, V4L2_PIX_FMT_RGB332);   /*  8  RGB-3-3-2     */
   PRINT_DEFINE_U(file, V4L2_PIX_FMT_RGB444);   /* 16  xxxxrrrr ggggbbbb */
@@ -295,32 +292,8 @@ int main(void)
   PRINT_DEFINE_U(file, V4L2_PIX_FMT_IPU3_SGRBG10); /* IPU3 packed 10-bit GRBG bayer */
   PRINT_DEFINE_U(file, V4L2_PIX_FMT_IPU3_SRGGB10); /* IPU3 packed 10-bit RGGB bayer */
 
-  /* SDR formats - used only for Software Defined Radio devices */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_CU8);     /* IQ u8 */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_CU16LE);  /* IQ u16le */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_CS8);     /* complex s8 */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_CS14LE);  /* complex s14le */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_RU12LE);  /* real u12le */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_PCU16BE); /* planar complex u16be */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_PCU18BE); /* planar complex u18be */
-  PRINT_DEFINE_U(file, V4L2_SDR_FMT_PCU20BE); /* planar complex u20be */
-
-  /* Touch formats - used for Touch devices */
-  PRINT_DEFINE_U(file, V4L2_TCH_FMT_DELTA_TD16); /* 16-bit signed deltas */
-  PRINT_DEFINE_U(file, V4L2_TCH_FMT_DELTA_TD08); /* 8-bit signed deltas */
-  PRINT_DEFINE_U(file, V4L2_TCH_FMT_TU16);       /* 16-bit unsigned touch data */
-  PRINT_DEFINE_U(file, V4L2_TCH_FMT_TU08);       /* 8-bit unsigned touch data */
-
-  /* Meta-data formats */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_VSP1_HGO); /* R-Car VSP1 1-D Histogram */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_VSP1_HGT); /* R-Car VSP1 2-D Histogram */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_UVC);      /* UVC Payload Header metadata */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_D4XX);     /* D4XX Payload Header metadata */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_VIVID);    /* Vivid Metadata */
-
-  /* Vendor specific - used for RK_ISP1 camera sub-system */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_RK_ISP1_PARAMS);  /* Rockchip ISP1 3A Parameters */
-  PRINT_DEFINE_U(file, V4L2_META_FMT_RK_ISP1_STAT_3A); /* Rockchip ISP1 3A Statistics */
+  PRINT_DEFINE_LU(file, VIDIOC_QUERYCAP);
+  PRINT_DEFINE_LU(file, VIDIOC_G_FMT);
 
   PRINT_DEFINE_LU(file, VIDIOC_REQBUFS);
   PRINT_DEFINE_LU(file, VIDIOC_QBUF);
