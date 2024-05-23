@@ -1,7 +1,8 @@
-use std::env;
 use std::path::PathBuf;
+use std::process::Command;
+use std::{env, io};
 
-fn main() {
+fn main() -> io::Result<()> {
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
     // the resulting bindings.
@@ -22,4 +23,26 @@ fn main() {
     bindings
         .write_to_file(out_path.join("v4l2-bindings.rs"))
         .expect("Couldn't write bindings!");
+
+    // Ensure Cargo re-runs this script if the C file changes
+    println!("cargo:rerun-if-changed=resources/resolve.c");
+    // compile our helper resolver.
+    let target_exe = out_path.join("resolve_constants");
+    Command::new("gcc")
+        .args(["resources/resolve.c", "-o", target_exe.to_str().unwrap()])
+        .status()
+        .expect("Faild to build resolver.c with gcc");
+
+    // Run the compiled c resolver  binary to create the `v4l2_constants.rs` file
+    Command::new(target_exe)
+        .status()
+        .expect("Failed to run constant resolver");
+
+    // Move the generated file to OUT_DIR
+    let generated_file = PathBuf::from("v4l2_constants.rs");
+    let dest_path = out_path.join("v4l2_constants.rs");
+
+    std::fs::rename(generated_file, dest_path).expect("Failed to move v4l2_constants.rs file");
+
+    Ok(())
 }

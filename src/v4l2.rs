@@ -7,26 +7,6 @@ use std::{
     path::Path,
 };
 
-// Generated with `resolve_ioctl.c``
-const VIDIOC_QUERYCAP: u64 = 2154321408;
-const VIDIOC_G_FMT: u64 = 3234878980;
-const _VIDIOC_S_FMT: u64 = 3234878981;
-
-const V4L2_PIX_FMT_YUYV: u32 = 1448695129;
-const V4L2_PIX_FMT_MJPEG: u32 = 1196444237;
-
-const VIDIOC_REQBUFS: u64 = 3222558216;
-const VIDIOC_QBUF: u64 = 3227014671;
-const VIDIOC_DQBUF: u64 = 3227014673;
-const VIDIOC_STREAMON: u64 = 1074026002;
-const VIDIOC_ENUM_FMT: u64 = 3225441794;
-
-#[repr(u32)]
-pub enum Formats {
-    V4L2_PIX_FMT_YUYV(u32) = 1448695129,
-    V4L2_PIX_FMT_MJPEG(u32) = 1196444237,
-}
-
 mod sys {
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
@@ -34,6 +14,7 @@ mod sys {
     #![allow(unused)]
 
     include!(concat!(env!("OUT_DIR"), "/v4l2-bindings.rs"));
+    include!(concat!(env!("OUT_DIR"), "/v4l2_constants.rs"));
 }
 
 // For variadic function ioctl
@@ -79,7 +60,7 @@ impl V4l2Frame<'_> {
 impl Drop for V4l2Frame<'_> {
     fn drop(&mut self) {
         unsafe {
-            ioctl!(self.fd, VIDIOC_QBUF, &mut self.buf).unwrap();
+            ioctl!(self.fd, sys::VIDIOC_QBUF, &mut self.buf).unwrap();
         }
     }
 }
@@ -105,7 +86,7 @@ impl V4l2VideoDevice {
 
         let capabilities = unsafe {
             let mut capabilities: MaybeUninit<sys::v4l2_capability> = MaybeUninit::uninit();
-            ioctl!(fd, VIDIOC_QUERYCAP, capabilities.as_mut_ptr()).unwrap();
+            ioctl!(fd, sys::VIDIOC_QUERYCAP, capabilities.as_mut_ptr()).unwrap();
             capabilities.assume_init()
         };
 
@@ -119,7 +100,7 @@ impl V4l2VideoDevice {
         let format = unsafe {
             let mut format: sys::v4l2_format = std::mem::zeroed();
             format.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            ioctl!(fd, VIDIOC_G_FMT, &mut format).unwrap();
+            ioctl!(fd, sys::VIDIOC_G_FMT, &mut format).unwrap();
             format
         };
 
@@ -130,7 +111,7 @@ impl V4l2VideoDevice {
             println!("pixelformat: {:?}", format.fmt.pix.pixelformat);
             println!("field: {:?}", format.fmt.pix.field);
 
-            assert!(format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV);
+            assert!(format.fmt.pix.pixelformat == sys::V4L2_PIX_FMT_YUYV);
             assert!(format.fmt.pix.field == sys::v4l2_field_V4L2_FIELD_NONE);
         }
 
@@ -151,7 +132,7 @@ impl V4l2VideoDevice {
             bufreq.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
             bufreq.memory = sys::v4l2_memory_V4L2_MEMORY_USERPTR;
 
-            ioctl!(fd, VIDIOC_REQBUFS, &mut bufreq).unwrap();
+            ioctl!(fd, sys::VIDIOC_REQBUFS, &mut bufreq).unwrap();
         }
 
         // Prepare streaming
@@ -163,14 +144,14 @@ impl V4l2VideoDevice {
             v4l2_buf.m.userptr = buffers[i].as_ptr() as u64;
             v4l2_buf.length = buffers[i].len().try_into().unwrap();
 
-            ioctl!(fd, VIDIOC_QBUF, &mut v4l2_buf).unwrap();
+            ioctl!(fd, sys::VIDIOC_QBUF, &mut v4l2_buf).unwrap();
         });
 
         // Start streaming
         let video_capture_buf_type: sys::v4l2_buf_type =
             sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
         unsafe {
-            ioctl!(fd, VIDIOC_STREAMON, &video_capture_buf_type).unwrap();
+            ioctl!(fd, sys::VIDIOC_STREAMON, &video_capture_buf_type).unwrap();
         }
 
         let (width, height) = unsafe {
@@ -211,7 +192,7 @@ impl V4l2VideoDevice {
 
             // Deque buffer. We can use them now and queue them
             // up again after we're done.
-            ioctl!(fd, VIDIOC_DQBUF, &v4l2_buf).unwrap();
+            ioctl!(fd, sys::VIDIOC_DQBUF, &v4l2_buf).unwrap();
 
             V4l2Frame {
                 fd,
@@ -231,7 +212,7 @@ impl V4l2VideoDevice {
                 let mut descr: sys::v4l2_fmtdesc = std::mem::zeroed();
                 descr.index = i;
                 descr.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                let ret = ioctl!(fd, VIDIOC_ENUM_FMT, &mut descr);
+                let ret = ioctl!(fd, sys::VIDIOC_ENUM_FMT, &mut descr);
 
                 if let Err(e) = ret {
                     if e.kind() == std::io::ErrorKind::InvalidInput {
