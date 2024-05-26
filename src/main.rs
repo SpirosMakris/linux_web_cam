@@ -9,8 +9,11 @@ mod v4l2;
 const DEVICE_NAME: &str = "/dev/video0";
 
 struct WebcamUi {
-    rx: Receiver<TextureHandle>,
+    frame_rx: Receiver<TextureHandle>,
+    ui_action_tx: Sender<UiAction>,
     last_texture: Option<TextureHandle>,
+    selected_size: usize,
+    available_frame_sizes: Vec<(u32, u32)>,
 }
 
 impl WebcamUi {
@@ -20,38 +23,98 @@ impl WebcamUi {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
         let v4l2_device = v4l2::V4l2VideoDevice::new(&DEVICE_NAME);
-
         v4l2_device.print_formats();
 
-        let (tx, rx) = mpsc::channel();
+        let available_frame_sizes = v4l2_device.get_frame_sizes();
+        println!("Available frame sizes: {:?}", available_frame_sizes);
+
+        // v4l2_device.set_frame_size(1);
+
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let (ui_action_tx, ui_action_rx) = mpsc::channel();
+
         let ctx = cc.egui_ctx.clone();
 
-        std::thread::spawn(move || feed_gui(ctx, v4l2_device, tx));
+        std::thread::spawn(move || feed_gui(ctx, v4l2_device, frame_tx, ui_action_rx));
 
         WebcamUi {
-            rx,
+            frame_rx,
+            ui_action_tx,
+            // @FIXME get correct initial size
+            selected_size: 0,
+            available_frame_sizes,
             last_texture: None,
         }
     }
 }
 
+fn size_to_str(size: &(u32, u32)) -> String {
+    format!("{}x{}", size.0, size.1)
+}
+
 impl eframe::App for WebcamUi {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        while let Ok(v) = self.rx.try_recv() {
+        while let Ok(v) = self.frame_rx.try_recv() {
             self.last_texture = Some(v);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            let prev_selected_size = self.selected_size;
+            egui::ComboBox::from_label("Frame sizes")
+                .selected_text(format!(
+                    "{:?}",
+                    self.available_frame_sizes[self.selected_size]
+                ))
+                .show_ui(ui, |ui| {
+                    for i in 0..self.available_frame_sizes.len() {
+                        if ui
+                            .selectable_value(
+                                &mut self.selected_size,
+                                i,
+                                size_to_str(&self.available_frame_sizes[i]),
+                            )
+                            .clicked()
+                        {
+                            self.selected_size = i;
+                        };
+                    }
+                });
+
+            if self.selected_size != prev_selected_size {
+                self.ui_action_tx
+                    .send(UiAction::ChangeSize(self.selected_size))
+                    .unwrap();
+            }
+
             if let Some(texture) = &self.last_texture {
                 ui.image((texture.id(), texture.size_vec2()));
             }
+
             ui.heading("Hello World!");
         });
     }
 }
 
-fn feed_gui(ctx: egui::Context, v4l2_device: v4l2::V4l2VideoDevice, tx: Sender<TextureHandle>) {
+pub enum UiAction {
+    ChangeSize(usize),
+}
+
+fn feed_gui(
+    ctx: egui::Context,
+    mut v4l2_device: v4l2::V4l2VideoDevice,
+    tx: Sender<TextureHandle>,
+    rx: Receiver<UiAction>,
+) {
     loop {
+        if let Ok(ui_action) = rx.try_recv() {
+            match ui_action {
+                UiAction::ChangeSize(idx) => {
+                    println!("Trying to change size to index {idx}");
+                    v4l2_device.set_frame_size(idx);
+                }
+            }
+        }
+
         let v4l2_frame = v4l2_device.get_frame();
 
         // YUYV encoded

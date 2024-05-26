@@ -108,7 +108,10 @@ impl V4l2VideoDevice {
             println!("image size: {:?}", format.fmt.pix.sizeimage);
             println!("width: {:?}", format.fmt.pix.width);
             println!("height: {:?}", format.fmt.pix.height);
-            println!("pixelformat: {:?}", format.fmt.pix.pixelformat);
+            println!(
+                "pixelformat: {:?}",
+                pixel_format_to_string(format.fmt.pix.pixelformat)
+            );
             println!("field: {:?}", format.fmt.pix.field);
 
             assert!(format.fmt.pix.pixelformat == sys::V4L2_PIX_FMT_YUYV);
@@ -204,13 +207,112 @@ impl V4l2VideoDevice {
         }
     }
 
+    unsafe fn deque_all_buffers(&self) -> Result<(), i32> {
+        let mut v4l2_buf: sys::v4l2_buffer = std::mem::zeroed();
+        v4l2_buf.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        v4l2_buf.memory = sys::v4l2_memory_V4L2_MEMORY_USERPTR;
+
+        let fd = self.handle.as_raw_fd();
+
+        loop {
+            match ioctl!(fd, sys::VIDIOC_DQBUF, &v4l2_buf) {
+                Ok(_) => (),
+                Err(e) => {
+                    if e.kind() == std::io::ErrorKind::WouldBlock {
+                        break;
+                    } else {
+                        panic!("That went well..");
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn set_frame_size(&mut self, index: usize) {
+        let frames_sizes = self.get_frame_sizes();
+
+        assert!(index < frames_sizes.len());
+
+        let (width, height) = frames_sizes[index];
+        let fd = self.handle.as_raw_fd();
+
+        unsafe {
+            let mut format: sys::v4l2_format = std::mem::zeroed();
+            format.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            // format.fmt.pix.pixelformat = sys::V4L2_PIX_FMT_YUYV;
+
+            ioctl!(fd, sys::VIDIOC_G_FMT, &mut format).unwrap();
+
+            format.fmt.pix.width = width;
+            format.fmt.pix.height = height;
+
+            let video_capture_buf_type: sys::v4l2_buf_type =
+                sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+            ioctl!(fd, sys::VIDIOC_STREAMOFF, &video_capture_buf_type).unwrap();
+
+            self.deque_all_buffers().unwrap();
+
+            ioctl!(fd, sys::VIDIOC_S_FMT, &mut format).unwrap();
+            self.width = width as usize;
+            self.height = height as usize;
+
+            ioctl!(fd, sys::VIDIOC_STREAMON, &video_capture_buf_type).unwrap();
+        }
+    }
+
+    pub fn get_frame_sizes(&self) -> Vec<(u32, u32)> {
+        let mut i = 0;
+        let fd = self.handle.as_raw_fd();
+        let mut res = Vec::new();
+
+        loop {
+            unsafe {
+                let mut descr: sys::v4l2_frmsizeenum = std::mem::zeroed();
+                descr.index = i;
+                descr.pixel_format = sys::V4L2_PIX_FMT_YUYV;
+
+                let ret = ioctl!(fd, sys::VIDIOC_ENUM_FRAMESIZES, &mut descr);
+
+                if let Err(e) = ret {
+                    if e.kind() == std::io::ErrorKind::InvalidInput {
+                        break;
+                    }
+
+                    panic!("Unexpected error: {e}");
+                };
+
+                if descr.type_ != sys::v4l2_frmsizetypes_V4L2_FRMSIZE_TYPE_DISCRETE {
+                    // panic!("We can only handle discrete frame sizes");
+                    println!(
+                        "We don't care about non-discrete framesizes: {:?}",
+                        descr.__bindgen_anon_1.stepwise
+                    );
+                    i += 1;
+                    continue;
+                }
+
+                let width = descr.__bindgen_anon_1.discrete.width;
+                let height = descr.__bindgen_anon_1.discrete.height;
+
+                res.push((width, height));
+            }
+
+            i += 1;
+        }
+
+        res
+    }
+
     pub fn print_formats(&self) {
-        let mut i: u32 = 0;
+        let mut format_index: u32 = 0;
         let fd = self.handle.as_raw_fd();
         loop {
             unsafe {
                 let mut descr: sys::v4l2_fmtdesc = std::mem::zeroed();
-                descr.index = i;
+                descr.index = format_index;
                 descr.type_ = sys::v4l2_buf_type_V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 let ret = ioctl!(fd, sys::VIDIOC_ENUM_FMT, &mut descr);
 
@@ -222,17 +324,66 @@ impl V4l2VideoDevice {
                     panic!("Unexpected error: {e}");
                 };
 
+                // We only care about YUYV
                 if descr.pixelformat != sys::V4L2_PIX_FMT_YUYV {
+                    println!(
+                        "Don't care about pixel format: {}",
+                        pixel_format_to_string(descr.pixelformat)
+                    );
+                    format_index += 1;
                     continue;
                 }
 
-                println!("{}", pixel_format_to_string(descr.pixelformat));
+                println!(
+                    "PIXEL_FORMAT: {}",
+                    pixel_format_to_string(descr.pixelformat)
+                );
+                // print_frame_sizes_for_format(fd, descr.pixelformat);
+
+                let frame_sizes_for_pixel_format = self.get_frame_sizes();
+                println!("Frame sizes: {frame_sizes_for_pixel_format:?}");
             }
 
-            i += 1;
+            format_index += 1;
         }
     }
 }
+
+// fn print_frame_sizes_for_format(fd: i32, format: u32) {
+//     let mut i = 0;
+//     loop {
+//         unsafe {
+//             let mut descr: sys::v4l2_frmsizeenum = std::mem::zeroed();
+//             descr.index = i;
+//             descr.pixel_format = format;
+//             // descr.type_ = sys::v4l2_frmsizetypes_V4L2_FRMSIZE_TYPE_DISCRETE;
+
+//             let ret = ioctl!(fd, sys::VIDIOC_ENUM_FRAMESIZES, &mut descr);
+
+//             if let Err(e) = ret {
+//                 if e.kind() == std::io::ErrorKind::InvalidInput {
+//                     break;
+//                 }
+
+//                 panic!("Unexpected error: {e}");
+//             };
+
+//             if descr.type_ != sys::v4l2_frmsizetypes_V4L2_FRMSIZE_TYPE_DISCRETE {
+//                 // panic!("We can only handle discrete frame sizes");
+//                 println!(
+//                     "We don't care about non-discrete framesizes: {:?}",
+//                     descr.__bindgen_anon_1.stepwise
+//                 );
+//                 i += 1;
+//                 continue;
+//             }
+
+//             println!("SIZE[{i}]: {:?}", descr.__bindgen_anon_1.discrete);
+//         }
+
+//         i += 1;
+//     }
+// }
 
 fn pixel_format_to_string(format: u32) -> &'static str {
     match format {
